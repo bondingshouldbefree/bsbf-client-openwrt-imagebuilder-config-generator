@@ -1,6 +1,6 @@
 ```
 Usage: ./bsbf-client-openwrt-imagebuilder-config-generator.sh
-       --server-ipv4 <ADDR> --server-port <PORT> --uuid <UUID> [--v2ray
+       --server-ipv4 <ADDR> --server-port <PORT> --uuid <UUID> [--xray --v2ray
        --tcp-in-udp-big-endian --no-luci --dongle-modem --quectel-modem
        --usb-adapters-and-android-tethering --ios-tethering --mikrotik-tools
        --debug-tools --perf-test]

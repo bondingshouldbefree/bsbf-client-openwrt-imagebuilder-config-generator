@@ -5,7 +5,7 @@
 # Author: Chester A. Unal <chester.a.unal@arinc9.com>
 
 usage() {
-	echo "Usage: $0 --server-ipv4 <ADDR> --server-port <PORT> --uuid <UUID> [--v2ray --tcp-in-udp-big-endian --no-luci --dongle-modem --quectel-modem --usb-adapters-and-android-tethering --ios-tethering --mikrotik-tools --debug-tools --perf-test]"
+	echo "Usage: $0 --server-ipv4 <ADDR> --server-port <PORT> --uuid <UUID> [--xray --v2ray --tcp-in-udp-big-endian --no-luci --dongle-modem --quectel-modem --usb-adapters-and-android-tethering --ios-tethering --mikrotik-tools --debug-tools --perf-test]"
 	exit 1
 }
 
@@ -28,6 +28,11 @@ while [ $# -gt 0 ]; do
 		[ -z "$2" ] && usage
 		uuid="$2"
 		shift 2
+		;;
+	--xray)
+		packages="$packages -sing-box-tiny xray-core kmod-nft-tproxy"
+		xray=1
+		shift
 		;;
 	--v2ray)
 		packages="$packages -sing-box-tiny v2ray-core kmod-nft-tproxy"
@@ -102,6 +107,39 @@ EOF
 uci delete sing-box.main.user
 uci set sing-box.main.enabled='1'
 uci commit sing-box"
+
+[ -n "$xray" ] && proxy_programme="# xray Configuration
+cat <<'EOF' > /etc/xray/config.json
+$(curl -s $BSBF_RESOURCES/resources-client/xray.json \
+  | jq --arg SERVER "$server_ipv4" \
+       --argjson PORT "$server_port" \
+       --arg UUID "$uuid" '
+        .outbounds[0].settings.address = $SERVER
+      | .outbounds[0].settings.port = $PORT
+      | .outbounds[0].settings.id = $UUID')
+EOF
+
+uci set xray.enabled.enabled='1'
+uci commit xray
+
+# Add rule to use routing table 100 for transparent proxy traffic.
+uci add network rule
+uci set network.@rule[-1].priority='0'
+uci set network.@rule[-1].lookup='100'
+uci set network.@rule[-1].mark='1'
+
+# Add route to route transparent proxy traffic to the loopback interface.
+uci add network route
+uci set network.@route[-1].interface='loopback'
+uci set network.@route[-1].type='local'
+uci set network.@route[-1].target='0.0.0.0/0'
+uci set network.@route[-1].table='100'
+uci commit network
+
+# nftables Configuration
+cat <<'EOF' > /etc/nftables.d/99-bsbf-proxy.nft
+$(curl -s $BSBF_RESOURCES/resources-client/99-bsbf-proxy-openwrt.nft)
+EOF"
 
 [ -n "$v2ray" ] && proxy_programme="# v2ray Configuration
 cat <<'EOF' > /etc/v2ray/config.json
