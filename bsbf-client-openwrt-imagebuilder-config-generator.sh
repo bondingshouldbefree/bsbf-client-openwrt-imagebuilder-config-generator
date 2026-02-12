@@ -73,7 +73,7 @@ while [ $# -gt 0 ]; do
 		shift
 		;;
 	--debug-tools)
-		packages="$packages curl htop mptcpize tcpdump"
+		packages="$packages curl mptcpize htop ss kmod-inet-mptcp-diag"
 		bsbf_netspeed=1
 		shift
 		;;
