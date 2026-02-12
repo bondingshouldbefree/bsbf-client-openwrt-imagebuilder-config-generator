@@ -9,7 +9,7 @@ usage() {
 	exit 1
 }
 
-packages="ethtool fping mptcpd ip-full tc-full kmod-sched kmod-sched-bpf coreutils-base64 sing-box-tiny"
+packages="ethtool fping ip-full tc-full kmod-sched kmod-sched-bpf coreutils-base64 sing-box-tiny"
 
 # Parse arguments.
 while [ $# -gt 0 ]; do
@@ -282,11 +282,6 @@ uci add_list dhcp.@dnsmasq[0].server='8.8.4.4'
 # Commit changes.
 uci commit
 
-# mptcpd Configuration
-cat <<'EOF' > /etc/mptcpd/mptcpd.conf
-$(curl -s $BSBF_RESOURCES/resources-client/mptcpd.conf)
-EOF
-
 $proxy_programme
 
 # bsbf-tcp-in-udp
@@ -306,35 +301,31 @@ $(curl -s $BSBF_RESOURCES/bsbf-tcp-in-udp/files/usr/sbin/bsbf-tcp-in-udp \
 EOF
 chmod +x /usr/sbin/bsbf-tcp-in-udp
 
-# bsbf-mptcp-helper
-cat <<'EOF' > /etc/config/bsbf-mptcp-helper
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp-helper/files/etc/config/bsbf-mptcp-helper)
+# bsbf-mptcp
+cat <<'EOF' > /etc/config/bsbf-mptcp
+$(curl -s $BSBF_RESOURCES/bsbf-mptcp/files/etc/config/bsbf-mptcp)
 EOF
 
-cat <<'EOF' > /etc/hotplug.d/iface/99-bsbf-mptcp-backup
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp-helper/files/etc/hotplug.d/iface/99-bsbf-mptcp-backup)
+cat <<'EOF' > /etc/hotplug.d/iface/99-bsbf-mptcp
+$(curl -s $BSBF_RESOURCES/bsbf-mptcp/files/etc/hotplug.d/iface/99-bsbf-mptcp)
 EOF
 
-cat <<'EOF' > /etc/hotplug.d/iface/99-bsbf-mptcp-remove
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp-helper/files/etc/hotplug.d/iface/99-bsbf-mptcp-remove)
+cat <<'EOF' > /etc/init.d/bsbf-mptcp
+$(curl -s $BSBF_RESOURCES/bsbf-mptcp/files/etc/init.d/bsbf-mptcp)
 EOF
+chmod +x /etc/init.d/bsbf-mptcp
 
-cat <<'EOF' > /etc/init.d/bsbf-mptcp-backup
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp-helper/files/etc/init.d/bsbf-mptcp-backup)
+cat <<'EOF' > /usr/sbin/bsbf-mptcp
+$(curl -s $BSBF_RESOURCES/bsbf-mptcp/files/usr/sbin/bsbf-mptcp)
 EOF
-chmod +x /etc/init.d/bsbf-mptcp-backup
-
-cat <<'EOF' > /usr/sbin/bsbf-mptcp-backup
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp-helper/files/usr/sbin/bsbf-mptcp-backup)
-EOF
-chmod +x /usr/sbin/bsbf-mptcp-backup
+chmod +x /usr/sbin/bsbf-mptcp
 
 cat <<'EOF' > /usr/sbin/bsbf-mptcp-helper
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp-helper/files/usr/sbin/bsbf-mptcp-helper)
+$(curl -s $BSBF_RESOURCES/bsbf-mptcp/files/usr/sbin/bsbf-mptcp-helper)
 EOF
 chmod +x /usr/sbin/bsbf-mptcp-helper
 
-/etc/init.d/bsbf-mptcp-backup enable && /etc/init.d/bsbf-mptcp-backup start
+/etc/init.d/bsbf-mptcp enable && /etc/init.d/bsbf-mptcp start
 
 # bsbf-route
 cat <<'EOF' > /etc/init.d/bsbf-route
