@@ -1,15 +1,15 @@
 #!/bin/sh
 # This script generates a uci-defaults script and a list of packages which can
-# be used with OpenWrt's imagebuilder to build an image with BSBF bonding
+# be used with OpenWrt's imagebuilder to build an image with the BSBF bonding
 # solution client.
 # Author: Chester A. Unal <chester.a.unal@arinc9.com>
 
 usage() {
-	echo "Usage: $0 --server-ipv4 <ADDR> --server-port <PORT> --uuid <UUID> [--xray --v2ray --tcp-in-udp-big-endian --no-luci --dongle-modem --quectel-modem --usb-adapters-and-android-tethering --ios-tethering --mikrotik-tools --debug-tools --perf-test]"
+	echo "Usage: $0 --server-ipv4 <ADDR> --server-port <PORT> --uuid <UUID> [--tcp-in-udp-big-endian --no-luci --dongle-modem --quectel-modem --usb-adapters-and-android-tethering --ios-tethering --mikrotik-tools --diag-tools --perf-test]"
 	exit 1
 }
 
-packages="ethtool fping ip-full tc-full kmod-sched kmod-sched-bpf coreutils-base64 sing-box-tiny"
+packages="ethtool fping ip-full tc-full kmod-sched kmod-sched-bpf coreutils-base64 xray-core kmod-nft-tproxy"
 
 # Parse arguments.
 while [ $# -gt 0 ]; do
@@ -28,16 +28,6 @@ while [ $# -gt 0 ]; do
 		[ -z "$2" ] && usage
 		uuid="$2"
 		shift 2
-		;;
-	--xray)
-		packages="$packages -sing-box-tiny xray-core kmod-nft-tproxy"
-		xray=1
-		shift
-		;;
-	--v2ray)
-		packages="$packages -sing-box-tiny v2ray-core kmod-nft-tproxy"
-		v2ray=1
-		shift
 		;;
 	--tcp-in-udp-big-endian)
 		tcp_in_udp_be=1
@@ -72,13 +62,13 @@ while [ $# -gt 0 ]; do
 		packages="$packages mac-telnet-client mac-telnet-discover mac-telnet-ping mac-telnet-server"
 		shift
 		;;
-	--debug-tools)
-		packages="$packages curl mptcpize htop ss kmod-inet-mptcp-diag"
+	--diag-tools)
+		packages="$packages curl htop ss kmod-inet-mptcp-diag"
 		bsbf_netspeed=1
 		shift
 		;;
 	--perf-test)
-		packages="$packages kmod-sched-flower kmod-veth coreutils-nproc iperf3 kmod-nft-tproxy"
+		packages="$packages kmod-sched-flower kmod-veth coreutils-nproc iperf3"
 		shift
 		;;
 	*)
@@ -91,88 +81,6 @@ done
 { [ -z "$server_ipv4" ] || [ -z "$server_port" ] || [ -z "$uuid" ]; } && usage
 
 BSBF_RESOURCES="https://raw.githubusercontent.com/bondingshouldbefree/bsbf-resources/refs/heads/main"
-
-# Decide the proxy programme.
-proxy_programme="# sing-box Configuration
-cat <<'EOF' > /etc/sing-box/config.json
-$(curl -s $BSBF_RESOURCES/resources-client/sing-box.json \
-  | jq --arg SERVER "$server_ipv4" \
-       --argjson PORT "$server_port" \
-       --arg UUID "$uuid" '
-        .outbounds[0].server = $SERVER
-      | .outbounds[0].server_port = $PORT
-      | .outbounds[0].uuid = $UUID')
-EOF
-
-uci delete sing-box.main.user
-uci set sing-box.main.enabled='1'
-uci commit sing-box"
-
-[ -n "$xray" ] && proxy_programme="# xray Configuration
-cat <<'EOF' > /etc/xray/config.json
-$(curl -s $BSBF_RESOURCES/resources-client/xray.json \
-  | jq --arg SERVER "$server_ipv4" \
-       --argjson PORT "$server_port" \
-       --arg UUID "$uuid" '
-        .outbounds[0].settings.address = $SERVER
-      | .outbounds[0].settings.port = $PORT
-      | .outbounds[0].settings.id = $UUID')
-EOF
-
-uci set xray.enabled.enabled='1'
-uci commit xray
-
-# Add rule to use routing table 100 for transparent proxy traffic.
-uci add network rule
-uci set network.@rule[-1].priority='0'
-uci set network.@rule[-1].lookup='100'
-uci set network.@rule[-1].mark='1'
-
-# Add route to route transparent proxy traffic to the loopback interface.
-uci add network route
-uci set network.@route[-1].interface='loopback'
-uci set network.@route[-1].type='local'
-uci set network.@route[-1].target='0.0.0.0/0'
-uci set network.@route[-1].table='100'
-uci commit network
-
-# nftables Configuration
-cat <<'EOF' > /etc/nftables.d/99-bsbf-proxy.nft
-$(curl -s $BSBF_RESOURCES/resources-client/99-bsbf-proxy-openwrt.nft)
-EOF"
-
-[ -n "$v2ray" ] && proxy_programme="# v2ray Configuration
-cat <<'EOF' > /etc/v2ray/config.json
-$(curl -s $BSBF_RESOURCES/resources-client/v2ray.json \
-  | jq --arg SERVER "$server_ipv4" \
-       --argjson PORT "$server_port" \
-       --arg UUID "$uuid" '
-        .outbounds[0].settings.vnext[0].address = $SERVER
-      | .outbounds[0].settings.vnext[0].port = $PORT
-      | .outbounds[0].settings.vnext[0].users[0].id = $UUID')
-EOF
-
-uci set v2ray.enabled.enabled='1'
-uci commit v2ray
-
-# Add rule to use routing table 100 for transparent proxy traffic.
-uci add network rule
-uci set network.@rule[-1].priority='0'
-uci set network.@rule[-1].lookup='100'
-uci set network.@rule[-1].mark='1'
-
-# Add route to route transparent proxy traffic to the loopback interface.
-uci add network route
-uci set network.@route[-1].interface='loopback'
-uci set network.@route[-1].type='local'
-uci set network.@route[-1].target='0.0.0.0/0'
-uci set network.@route[-1].table='100'
-uci commit network
-
-# nftables Configuration
-cat <<'EOF' > /etc/nftables.d/99-bsbf-proxy.nft
-$(curl -s $BSBF_RESOURCES/resources-client/99-bsbf-proxy-openwrt.nft)
-EOF"
 
 # Decide the TCP-in-UDP object.
 tcp_in_udp_endianness="tcp_in_udp_tc_le.o"
@@ -279,10 +187,38 @@ done
 uci add_list dhcp.@dnsmasq[0].server='8.8.8.8'
 uci add_list dhcp.@dnsmasq[0].server='8.8.4.4'
 
+# xray Configuration
+cat <<'EOF' > /etc/xray/config.json
+$(curl -s $BSBF_RESOURCES/resources-client/xray.json \
+  | jq --arg SERVER "$server_ipv4" \
+       --argjson PORT "$server_port" \
+       --arg UUID "$uuid" '
+        .outbounds[0].settings.address = $SERVER
+      | .outbounds[0].settings.port = $PORT
+      | .outbounds[0].settings.id = $UUID')
+EOF
+
+uci set xray.enabled.enabled='1'
+
+# Add rule to use routing table 100 for transparent proxy traffic.
+uci add network rule
+uci set network.@rule[-1].priority='0'
+uci set network.@rule[-1].lookup='100'
+uci set network.@rule[-1].mark='1'
+
+# Add route to route transparent proxy traffic to the loopback interface.
+uci add network route
+uci set network.@route[-1].interface='loopback'
+uci set network.@route[-1].type='local'
+uci set network.@route[-1].target='0.0.0.0/0'
+uci set network.@route[-1].table='100'
+
 # Commit changes.
 uci commit
 
-$proxy_programme
+# nftables Configuration
+cat <<'EOF' > /etc/nftables.d/99-bsbf-proxy.nft
+$(curl -s $BSBF_RESOURCES/resources-client/99-bsbf-proxy-openwrt.nft)
 
 # bsbf-tcp-in-udp
 cat <<'EOF' > /etc/hotplug.d/iface/99-bsbf-tcp-in-udp
