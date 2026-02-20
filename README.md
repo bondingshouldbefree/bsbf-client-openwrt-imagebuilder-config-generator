@@ -1,8 +1,8 @@
 ```
 Usage: ./bsbf-client-openwrt-config-generator.sh --server-ipv4 <ADDR>
-       --server-port <PORT> --uuid <UUID> [--tcp-in-udp-big-endian --no-luci
-       --dongle-modem --quectel-modem --usb-adapters-and-android-tethering
-       --ios-tethering --mikrotik-tools --diag-tools --perf-test]
+       --server-port <PORT> --uuid <UUID> [--no-luci --dongle-modem
+       --quectel-modem --usb-adapters-and-android-tethering --ios-tethering
+       --mikrotik-tools --diag-tools --perf-test]
 ```
 
 Once the script is run, the package list and the uci-defaults script can be used
@@ -13,13 +13,14 @@ jq -Rs '
 {
   defaults: .,
   packages: [
+    "bsbf-mptcp",
+    "bsbf-route",
+    "bsbf-tcp-in-udp",
     "ethtool",
-    "fping",
     "ip-full",
     "tc-full",
     "kmod-sched",
     "kmod-sched-bpf",
-    "coreutils-base64",
     "xray-core",
     "kmod-nft-tproxy",
     "-luci"

@@ -7,11 +7,11 @@
 # solution client.
 
 usage() {
-	echo "Usage: $0 --server-ipv4 <ADDR> --server-port <PORT> --uuid <UUID> [--tcp-in-udp-big-endian --no-luci --dongle-modem --quectel-modem --usb-adapters-and-android-tethering --ios-tethering --mikrotik-tools --diag-tools --perf-test]"
+	echo "Usage: $0 --server-ipv4 <ADDR> --server-port <PORT> --uuid <UUID> [--no-luci --dongle-modem --quectel-modem --usb-adapters-and-android-tethering --ios-tethering --mikrotik-tools --diag-tools --perf-test]"
 	exit 1
 }
 
-packages="ethtool fping ip-full tc-full kmod-sched kmod-sched-bpf coreutils-base64 xray-core kmod-nft-tproxy"
+packages="bsbf-mptcp bsbf-route bsbf-tcp-in-udp ethtool ip-full tc-full kmod-sched kmod-sched-bpf xray-core kmod-nft-tproxy"
 
 # Parse arguments.
 while [ $# -gt 0 ]; do
@@ -31,33 +31,24 @@ while [ $# -gt 0 ]; do
 		uuid="$2"
 		shift 2
 		;;
-	--tcp-in-udp-big-endian)
-		tcp_in_udp_be=1
-		shift
-		;;
 	--no-luci)
 		packages="$packages -luci"
 		shift
 		;;
 	--dongle-modem)
-		packages="$packages kmod-usb-net-cdc-ether usb-modeswitch"
-		bsbf_usb_netdev_autodhcp=1
+		packages="$packages bsbf-usb-netdev-autodhcp kmod-usb-net-cdc-ether usb-modeswitch"
 		shift
 		;;
 	--quectel-modem)
-		packages="$packages kmod-usb-net-cdc-mbim kmod-usb-serial-option umbim"
-		bsbf_quectel_usbnet=1
-		bsbf_cdc_mbim=1
+		packages="$packages bsbf-quectel-usbnet kmod-usb-net-cdc-mbim kmod-usb-serial-option umbim"
 		shift
 		;;
 	--usb-adapters-and-android-tethering)
-		packages="$packages kmod-usb-net-cdc-ether kmod-usb-net-rtl8152 kmod-usb-net-rndis"
-		bsbf_usb_netdev_autodhcp=1
+		packages="$packages bsbf-usb-netdev-autodhcp kmod-usb-net-cdc-ether kmod-usb-net-rtl8152 kmod-usb-net-rndis"
 		shift
 		;;
 	--ios-tethering)
-		packages="$packages kmod-usb-net-ipheth usbmuxd"
-		bsbf_usb_netdev_autodhcp=1
+		packages="$packages bsbf-usb-netdev-autodhcp kmod-usb-net-ipheth usbmuxd"
 		shift
 		;;
 	--mikrotik-tools)
@@ -65,8 +56,7 @@ while [ $# -gt 0 ]; do
 		shift
 		;;
 	--diag-tools)
-		packages="$packages curl htop ss kmod-inet-mptcp-diag"
-		bsbf_netspeed=1
+		packages="$packages bsbf-netspeed curl htop ss kmod-inet-mptcp-diag"
 		shift
 		;;
 	--perf-test)
@@ -83,40 +73,6 @@ done
 { [ -z "$server_ipv4" ] || [ -z "$server_port" ] || [ -z "$uuid" ]; } && usage
 
 BSBF_RESOURCES="https://raw.githubusercontent.com/bondingshouldbefree/bsbf-resources/refs/heads/main"
-
-# Decide the TCP-in-UDP object.
-tcp_in_udp_endianness="tcp_in_udp_tc_le.o"
-[ -n "$tcp_in_udp_be" ] && tcp_in_udp_endianness="tcp_in_udp_tc_be.o"
-
-# Additional options.
-[ -n "$bsbf_usb_netdev_autodhcp" ] && additional_options="# bsbf-usb-netdev-autodhcp
-cat <<'EOF' > /etc/hotplug.d/usb/99-bsbf-usb-netdev-autodhcp
-$(curl -s $BSBF_RESOURCES/bsbf-usb-netdev-autodhcp/files/etc/hotplug.d/net/99-bsbf-usb-netdev-autodhcp)
-EOF
-"
-
-[ -n "$bsbf_quectel_usbnet" ] && additional_options="$additional_options
-# bsbf-quectel-usbnet
-cat <<'EOF' > /etc/init.d/bsbf-quectel-usbnet
-$(curl -s $BSBF_RESOURCES/bsbf-quectel-usbnet/files/etc/init.d/bsbf-quectel-usbnet)
-EOF
-chmod +x /etc/init.d/bsbf-quectel-usbnet
-
-cat <<'EOF' > /usr/sbin/bsbf-quectel-usbnet
-$(curl -s $BSBF_RESOURCES/bsbf-quectel-usbnet/files/usr/sbin/bsbf-quectel-usbnet)
-EOF
-chmod +x /usr/sbin/bsbf-quectel-usbnet
-
-/etc/init.d/bsbf-quectel-usbnet enable && /etc/init.d/bsbf-quectel-usbnet start
-"
-
-[ -n "$bsbf_netspeed" ] && additional_options="$additional_options
-# bsbf-netspeed
-cat <<'EOF' > /usr/sbin/bsbf-netspeed
-$(curl -s $BSBF_RESOURCES/bsbf-netspeed/files/usr/sbin/bsbf-netspeed)
-EOF
-chmod +x /usr/sbin/bsbf-netspeed
-"
 
 # Generate the uci-defaults script.
 cat <<EOF2 > 99-bsbf-bonding
@@ -223,64 +179,14 @@ uci commit
 # nftables Configuration
 cat <<'EOF' > /etc/nftables.d/99-bsbf-proxy.nft
 $(curl -s $BSBF_RESOURCES/resources-client/99-bsbf-proxy-openwrt.nft)
-
-# bsbf-tcp-in-udp
-cat <<'EOF' > /etc/hotplug.d/iface/99-bsbf-tcp-in-udp
-$(curl -s $BSBF_RESOURCES/bsbf-tcp-in-udp/files/etc/hotplug.d/iface/99-bsbf-tcp-in-udp)
 EOF
 
-mkdir -p /usr/local/share/tcp-in-udp
-cat <<'EOF' | base64 -d > /usr/local/share/tcp-in-udp/tcp_in_udp_tc.o
-$(curl -s $BSBF_RESOURCES/bsbf-tcp-in-udp/files/usr/local/share/tcp-in-udp/$tcp_in_udp_endianness | base64)
-EOF
-
+# bsbf-tcp-in-udp Configuration
 cat <<'EOF' > /usr/sbin/bsbf-tcp-in-udp
-$(curl -s $BSBF_RESOURCES/bsbf-tcp-in-udp/files/usr/sbin/bsbf-tcp-in-udp \
+$(curl -s $BSBF_RESOURCES/resources-client/bsbf-tcp-in-udp \
   | sed -e "s/^BASE_PORT=.*/BASE_PORT=$server_port/" \
 	-e "s/^IPv4=.*/IPv4=\"$server_ipv4\"/")
 EOF
-chmod +x /usr/sbin/bsbf-tcp-in-udp
-
-# bsbf-mptcp
-cat <<'EOF' > /etc/config/bsbf-mptcp
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp/files/etc/config/bsbf-mptcp)
-EOF
-
-cat <<'EOF' > /etc/hotplug.d/iface/99-bsbf-mptcp
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp/files/etc/hotplug.d/iface/99-bsbf-mptcp)
-EOF
-
-cat <<'EOF' > /etc/init.d/bsbf-mptcp
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp/files/etc/init.d/bsbf-mptcp)
-EOF
-chmod +x /etc/init.d/bsbf-mptcp
-
-cat <<'EOF' > /usr/sbin/bsbf-mptcp
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp/files/usr/sbin/bsbf-mptcp)
-EOF
-chmod +x /usr/sbin/bsbf-mptcp
-
-cat <<'EOF' > /usr/sbin/bsbf-mptcp-helper
-$(curl -s $BSBF_RESOURCES/bsbf-mptcp/files/usr/sbin/bsbf-mptcp-helper)
-EOF
-chmod +x /usr/sbin/bsbf-mptcp-helper
-
-/etc/init.d/bsbf-mptcp enable && /etc/init.d/bsbf-mptcp start
-
-# bsbf-route
-cat <<'EOF' > /etc/init.d/bsbf-route
-$(curl -s $BSBF_RESOURCES/bsbf-route/files/etc/init.d/bsbf-route)
-EOF
-chmod +x /etc/init.d/bsbf-route
-
-cat <<'EOF' > /usr/sbin/bsbf-route
-$(curl -s $BSBF_RESOURCES/bsbf-route/files/usr/sbin/bsbf-route)
-EOF
-chmod +x /usr/sbin/bsbf-route
-
-/etc/init.d/bsbf-route enable && /etc/init.d/bsbf-route start
-
-$additional_options
 EOF2
 
 # Print packages to stdout in a single line.
