@@ -1,8 +1,10 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2025-2026 Chester A. Unal <chester.a.unal@arinc9.com>
+#
 # This script generates a uci-defaults script and a list of packages which can
 # be used with OpenWrt's imagebuilder to build an image with the BSBF bonding
 # solution client.
-# Author: Chester A. Unal <chester.a.unal@arinc9.com>
 
 usage() {
 	echo "Usage: $0 --server-ipv4 <ADDR> --server-port <PORT> --uuid <UUID> [--tcp-in-udp-big-endian --no-luci --dongle-modem --quectel-modem --usb-adapters-and-android-tethering --ios-tethering --mikrotik-tools --diag-tools --perf-test]"
@@ -118,8 +120,10 @@ chmod +x /usr/sbin/bsbf-netspeed
 
 # Generate the uci-defaults script.
 cat <<EOF2 > 99-bsbf-bonding
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2025-2026 Chester A. Unal <chester.a.unal@arinc9.com>
+#
 # This script provides the BondingShouldBeFree bonding solution.
-# Author: Chester A. Unal <chester.a.unal@arinc9.com>
 
 # Get the interface of lan network.
 lan_network_interface="\$(uci get network.lan.device)"
@@ -279,5 +283,5 @@ chmod +x /usr/sbin/bsbf-route
 $additional_options
 EOF2
 
-# Print packages to stdout (single line)
+# Print packages to stdout in a single line.
 echo "$packages"
